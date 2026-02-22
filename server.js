@@ -24,10 +24,9 @@ io.on("connection", (socket) => {
     rooms[key] = [socket.id];
     socket.join(key);
 
-    socket.emit("room-created", key);
-    socket.emit("start-chat", key);
-
     console.log("Room created:", key);
+
+    socket.emit("room-created", key);
   });
 
   // JOIN ROOM
@@ -43,12 +42,12 @@ io.on("connection", (socket) => {
     }
   });
 
-  // MESSAGE
- socket.on("send-message", ({ key, name, message }) => {
-  io.to(key).emit("receive-message", { name, message });
-});
+  // SEND MESSAGE
+  socket.on("send-message", ({ key, name, message }) => {
+    io.to(key).emit("receive-message", { name, message });
+  });
 
-  // DISCONNECT
+  // DISCONNECT CLEANUP
   socket.on("disconnect", () => {
     for (let key in rooms) {
       rooms[key] = rooms[key].filter(id => id !== socket.id);
@@ -59,9 +58,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// server.listen(3000, () => {
-//   console.log("Server running on http://localhost:3000");
-// });
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
