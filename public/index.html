@@ -8,12 +8,11 @@
 
 <div class="bg-white w-full max-w-md h-[600px] rounded-2xl shadow-xl flex flex-col">
 
-  <!-- HEADER -->
   <div class="bg-blue-600 text-white p-4 text-center font-semibold rounded-t-2xl">
     Secure 1:1 Chat
   </div>
 
-  <!-- NAME + ROOM SECTION -->
+  <!-- NAME SECTION -->
   <div id="nameSection" class="p-6 space-y-4">
 
     <input id="nameInput" type="text" placeholder="Enter your name"
@@ -35,7 +34,6 @@
 
     <div id="keyDisplay"></div>
     <p id="error" class="text-red-500 text-sm"></p>
-
   </div>
 
   <!-- CHAT SECTION -->
@@ -43,10 +41,16 @@
 
     <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50"></div>
 
-    <div class="p-3 border-t flex space-x-2">
+    <div class="p-3 border-t flex space-x-2 items-center">
       <input id="msgInput"
         class="flex-1 border rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         placeholder="Type a message...">
+
+      <button id="recordBtn"
+        class="bg-red-500 text-white px-3 rounded-full">
+        🎙
+      </button>
+
       <button id="sendBtn"
         class="bg-blue-600 text-white px-4 rounded-full hover:bg-blue-700">
         Send
@@ -63,6 +67,8 @@ const socket = io();
 
 let currentKey = "";
 let userName = "";
+let mediaRecorder;
+let audioChunks = [];
 
 // CREATE ROOM
 document.getElementById("createBtn").onclick = () => {
@@ -84,13 +90,13 @@ document.getElementById("joinBtn").onclick = () => {
   socket.emit("join-room", key);
 };
 
-// ROOM CREATED → SHOW KEY
+// ROOM CREATED
 socket.on("room-created", (key) => {
   currentKey = key;
 
   document.getElementById("keyDisplay").innerHTML = `
     <div class="bg-yellow-100 text-yellow-800 p-3 rounded-lg text-center">
-      <p class="font-semibold">Share this Key with your friend:</p>
+      <p class="font-semibold">Share this Key:</p>
       <div class="flex justify-center items-center gap-2 mt-2">
         <span class="text-xl font-bold">${key}</span>
         <button onclick="navigator.clipboard.writeText('${key}')"
@@ -105,35 +111,21 @@ socket.on("room-created", (key) => {
 // START CHAT
 socket.on("start-chat", (key) => {
   currentKey = key;
-
   document.getElementById("nameSection").classList.add("hidden");
   document.getElementById("chatSection").classList.remove("hidden");
 });
 
-// RECEIVE MESSAGE
+// TEXT MESSAGE RECEIVE
 socket.on("receive-message", ({ name, message }) => {
-  const msgDiv = document.createElement("div");
-  const isMe = name === userName;
-
-  msgDiv.className = isMe ? "flex justify-end" : "flex justify-start";
-
-  msgDiv.innerHTML = `
-    <div class="${isMe ? 'bg-blue-600 text-white' : 'bg-gray-300'} 
-        px-4 py-2 rounded-2xl max-w-xs">
-        <p class="text-xs font-semibold">${name}</p>
-        <p>${message}</p>
-    </div>
-  `;
-
-  document.getElementById("messages").appendChild(msgDiv);
+  addMessage(name, message, false);
 });
 
-// ERROR
-socket.on("error-msg", (msg) => {
-  document.getElementById("error").innerText = msg;
+// VOICE MESSAGE RECEIVE
+socket.on("receive-voice", ({ name, audio }) => {
+  addMessage(name, audio, true);
 });
 
-// SEND MESSAGE
+// SEND TEXT
 document.getElementById("sendBtn").onclick = () => {
   const message = document.getElementById("msgInput").value.trim();
   if (!message) return;
@@ -146,6 +138,61 @@ document.getElementById("sendBtn").onclick = () => {
 
   document.getElementById("msgInput").value = "";
 };
+
+// RECORD VOICE
+document.getElementById("recordBtn").onclick = async () => {
+  if (!mediaRecorder || mediaRecorder.state === "inactive") {
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+
+    mediaRecorder.start();
+    audioChunks = [];
+
+    mediaRecorder.ondataavailable = event => {
+      audioChunks.push(event.data);
+    };
+
+    mediaRecorder.onstop = () => {
+      const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      reader.onloadend = () => {
+        socket.emit("send-voice", {
+          key: currentKey,
+          name: userName,
+          audio: reader.result
+        });
+      };
+    };
+
+    document.getElementById("recordBtn").innerText = "⏹";
+  } else {
+    mediaRecorder.stop();
+    document.getElementById("recordBtn").innerText = "🎙";
+  }
+};
+
+// ADD MESSAGE FUNCTION
+function addMessage(name, content, isAudio) {
+  const msgDiv = document.createElement("div");
+  const isMe = name === userName;
+
+  msgDiv.className = isMe ? "flex justify-end" : "flex justify-start";
+
+  msgDiv.innerHTML = `
+    <div class="${isMe ? 'bg-blue-600 text-white' : 'bg-gray-300'} 
+        px-4 py-2 rounded-2xl max-w-xs">
+        <p class="text-xs font-semibold">${name}</p>
+        ${isAudio
+          ? `<audio controls src="${content}" class="mt-1"></audio>`
+          : `<p>${content}</p>`}
+    </div>
+  `;
+
+  document.getElementById("messages").appendChild(msgDiv);
+}
 </script>
 
 </body>

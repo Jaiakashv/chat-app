@@ -8,7 +8,7 @@ const io = new Server(server);
 
 app.use(express.static("public"));
 
-let rooms = {}; // { key: [socketId1, socketId2] }
+let rooms = {}; // { key: [socket1, socket2] }
 
 function generateKey() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -24,8 +24,6 @@ io.on("connection", (socket) => {
     rooms[key] = [socket.id];
     socket.join(key);
 
-    console.log("Room created:", key);
-
     socket.emit("room-created", key);
   });
 
@@ -36,18 +34,22 @@ io.on("connection", (socket) => {
       socket.join(key);
 
       io.to(key).emit("start-chat", key);
-      console.log("User joined room:", key);
     } else {
       socket.emit("error-msg", "Invalid or Full Room");
     }
   });
 
-  // SEND MESSAGE
+  // TEXT MESSAGE
   socket.on("send-message", ({ key, name, message }) => {
     io.to(key).emit("receive-message", { name, message });
   });
 
-  // DISCONNECT CLEANUP
+  // VOICE MESSAGE
+  socket.on("send-voice", ({ key, name, audio }) => {
+    io.to(key).emit("receive-voice", { name, audio });
+  });
+
+  // CLEANUP
   socket.on("disconnect", () => {
     for (let key in rooms) {
       rooms[key] = rooms[key].filter(id => id !== socket.id);
@@ -61,5 +63,5 @@ io.on("connection", (socket) => {
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
-  console.log("Server running...");
+  console.log("Server running on port", PORT);
 });
