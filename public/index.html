@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Secure 1:1 Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+
+<div class="bg-white w-full max-w-md h-[600px] rounded-2xl shadow-xl flex flex-col">
+
+  <!-- HEADER -->
+  <div class="bg-blue-600 text-white p-4 text-center font-semibold rounded-t-2xl">
+    Secure 1:1 Chat
+  </div>
+
+  <!-- NAME SECTION -->
+  <div id="nameSection" class="p-6 space-y-4">
+    <input id="nameInput" type="text" placeholder="Enter your name"
+      class="w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+    
+    <button id="createBtn"
+      class="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600">
+      Create Secure Room
+    </button>
+
+    <div class="flex space-x-2">
+      <input id="keyInput" placeholder="Enter Room Key"
+        class="flex-1 border rounded-lg p-2">
+      <button id="joinBtn"
+        class="bg-blue-500 text-white px-4 rounded-lg hover:bg-blue-600">
+        Join
+      </button>
+    </div>
+
+    <p id="keyDisplay" class="text-sm text-gray-600"></p>
+    <p id="error" class="text-red-500 text-sm"></p>
+  </div>
+
+  <!-- CHAT SECTION -->
+  <div id="chatSection" class="hidden flex flex-col flex-1">
+
+    <!-- Messages -->
+    <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50"></div>
+
+    <!-- Input -->
+    <div class="p-3 border-t flex space-x-2">
+      <input id="msgInput"
+        class="flex-1 border rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        placeholder="Type a message...">
+      <button id="sendBtn"
+        class="bg-blue-600 text-white px-4 rounded-full hover:bg-blue-700">
+        Send
+      </button>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+
+let currentKey = "";
+let userName = "";
+
+// CREATE ROOM
+document.getElementById("createBtn").onclick = () => {
+  userName = document.getElementById("nameInput").value.trim();
+  if (!userName) return alert("Enter your name");
+
+  socket.emit("create-room");
+};
+
+// JOIN ROOM
+document.getElementById("joinBtn").onclick = () => {
+  userName = document.getElementById("nameInput").value.trim();
+  if (!userName) return alert("Enter your name");
+
+  const key = document.getElementById("keyInput").value.trim();
+  currentKey = key;
+  socket.emit("join-room", key);
+};
+
+// ROOM CREATED
+socket.on("room-created", (key) => {
+  currentKey = key;
+  document.getElementById("keyDisplay").innerText =
+    "Share this key: " + key;
+});
+
+// START CHAT
+socket.on("start-chat", (key) => {
+  currentKey = key;
+  document.getElementById("nameSection").classList.add("hidden");
+  document.getElementById("chatSection").classList.remove("hidden");
+});
+
+// RECEIVE MESSAGE
+socket.on("receive-message", ({ name, message }) => {
+  const msgDiv = document.createElement("div");
+
+  const isMe = name === userName;
+
+  msgDiv.className = isMe
+    ? "flex justify-end"
+    : "flex justify-start";
+
+  msgDiv.innerHTML = `
+    <div class="${isMe ? 'bg-blue-600 text-white' : 'bg-gray-300'} 
+        px-4 py-2 rounded-2xl max-w-xs">
+        <p class="text-xs font-semibold">${name}</p>
+        <p>${message}</p>
+    </div>
+  `;
+
+  document.getElementById("messages").appendChild(msgDiv);
+});
+
+// ERROR
+socket.on("error-msg", (msg) => {
+  document.getElementById("error").innerText = msg;
+});
+
+// SEND MESSAGE
+document.getElementById("sendBtn").onclick = () => {
+  const message = document.getElementById("msgInput").value.trim();
+  if (!message) return;
+
+  socket.emit("send-message", {
+    key: currentKey,
+    name: userName,
+    message
+  });
+
+  document.getElementById("msgInput").value = "";
+};
+</script>
+
+</body>
+</html>
